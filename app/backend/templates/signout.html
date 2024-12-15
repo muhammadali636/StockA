@@ -1,0 +1,12 @@
+{% extends "layout.html" %}
+
+{% block title %}signout{% endblock %}
+
+{% block header %}
+    you have been signed out
+{% endblock %}
+
+{% block content %}
+    <a href="{{ url_for('login') }}" class="login-button">login</a> </a> <!--to login page again-->
+    <a href="{{ url_for('register') }}" class="register-button">register</a> <!--to register page -->
+{% endblock %}

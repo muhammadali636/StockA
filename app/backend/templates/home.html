@@ -1,0 +1,14 @@
+{% extends "layout.html" %}
+
+{% block title %}Home Page{% endblock %}
+
+{% block header %}
+    Home page 
+{% endblock %}
+
+{% block content %}
+    <h1>Welcome to the home page!</h1>
+    <a href="{{ url_for('signout')}}" class="signout">signout</a> </a> <!--sign out button-->
+    <a href="{{ url_for('delete')}}" class="delete">delete</a> </a>
+    <a href="{{ url_for('update')}}" class="update">update</a> </a>
+{% endblock %}
