@@ -3,17 +3,26 @@
 {% block title %}Registration Page{% endblock %}
 
 {% block header %}
-    <h1>register Page</h1>
+    <h1>Register Page</h1>
 {% endblock %}
 
 {% block content %}
-    <form action="{{ url_for('login') }}" method="post">  <!-- Change to POST so stuff not visible on url bruh -->
-        <label for="username">Username:</label>
-        <input type="text" id="username" name="username" required>
-        
-        <label for="password">Password:</label>
-        <input type="password" id="password" name="password" required>
-        
-        <button type="submit">register</button>
+    <h2>Create a New Account</h2>
+
+    <form action="{{ url_for('register') }}" method="post">
+        <div>
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required>
+        </div>
+
+        <div>
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" required>
+        </div>
+
+        <button type="submit">Register</button>
     </form>
+
+    <br>
+    <a href="{{ url_for('login') }}">Already have an account? Login here</a>
 {% endblock %}

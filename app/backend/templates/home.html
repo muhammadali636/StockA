@@ -3,12 +3,11 @@
 {% block title %}Home Page{% endblock %}
 
 {% block header %}
-    Home page 
+    <h1>Home Page</h1>
 {% endblock %}
 
 {% block content %}
-    <h1>Welcome to the home page!</h1>
-    <a href="{{ url_for('signout')}}" class="signout">signout</a> </a> <!--sign out button-->
-    <a href="{{ url_for('delete')}}" class="delete">delete</a> </a>
-    <a href="{{ url_for('update')}}" class="update">update</a> </a>
+    <h2>Welcome, {{ session['username'] }}!</h2> 
+    <p>Welcome to home page!</p>
+    <a href="{{ url_for('signout') }}" class="signout">Sign Out</a> 
 {% endblock %}

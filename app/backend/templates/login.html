@@ -7,13 +7,22 @@
 {% endblock %}
 
 {% block content %}
-    <form action="{{ url_for('home') }}" method="post">  <!-- Change to POST so stuff not visible on url bruh -->
-        <label for="username">Username:</label>
-        <input type="text" id="username" name="username" required>
-        
-        <label for="password">Password:</label>
-        <input type="password" id="password" name="password" required>
-        
+    <h2>Login to Your Account</h2>
+
+    <form action="{{ url_for('login') }}" method="post">  
+        <div>
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required>
+        </div>
+
+        <div>
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" required>
+        </div>
+
         <button type="submit">Login</button>
     </form>
+
+    <br>
+    <a href="{{ url_for('register') }}">Don't have an account? Register here.</a>
 {% endblock %}
