@@ -1,0 +1,91 @@
+{% extends "layout.html" %}
+
+{% block title %}Home Page{% endblock %}
+
+{% block header %}
+    <h1>Home Page</h1>
+{% endblock %}
+
+{% block content %}
+    <h2>Welcome, {{ session['username'] }}!</h2>
+    <p>This is your Home Dashboard.</p>
+
+    <form method="POST">
+        <div class="input-group">
+            <label for="stock">Stock Symbol:</label>
+            <input type="text" id="stock" name="stock" required>
+        </div>
+
+        <div class="input-group">
+            <label for="time_filter">Time Filter:</label>
+            <select id="time_filter" name="time_filter" required>
+                <option value="day">Day</option>
+                <option value="week">Week</option>
+                <option value="month">Month</option>
+                <option value="year">Year</option>
+                <option value="all">All</option>
+            </select>
+        </div>
+
+        <div class="subreddit-list">
+            <p>Select Subreddits:</p>
+            <label><input type="checkbox" name="subreddits" value="wallstreetbets"> r/wallstreetbets</label>
+            <label><input type="checkbox" name="subreddits" value="pennystocks"> r/pennystocks</label>
+            <label><input type="checkbox" name="subreddits" value="valueinvesting"> r/valueinvesting</label>
+            <label><input type="checkbox" name="subreddits" value="investing"> r/investing</label>
+            <label><input type="checkbox" name="subreddits" value="stockmarket"> r/stockmarket</label>
+            <label><input type="checkbox" name="subreddits" value="stocksandtrading"> r/stocksandtrading</label>
+            <label><input type="checkbox" name="subreddits" value="robinhoodpennystocks"> r/robinhoodpennystocks</label>
+            <label><input type="checkbox" name="subreddits" value="wallstreetbetselite"> r/wallstreetbetselite</label>
+            <label><input type="checkbox" name="subreddits" value="shortsqueeze"> r/shortsqueeze</label>
+            <label><input type="checkbox" name="subreddits" value="dividends"> r/dividends</label>
+        </div>
+
+        <button type="submit">Analyze</button>
+    </form>
+
+    <hr>
+
+    {% if metrics %}
+      <h3>Stock Price Metrics</h3>
+      <p><strong>Last Close:</strong> {{ metrics['last_close']|round(2) }}</p>
+      <p><strong>Average Daily Change:</strong> {{ metrics['avg_daily_change']|round(2) }}%</p>
+    {% endif %}
+
+    {% if posts_data %}
+      <h3>Analysis Results</h3>
+      <ul>
+        {% for post in posts_data %}
+          <li style="margin-bottom: 10px;">
+            <strong>{{ post.title }}</strong> | Subreddit: <em>{{ post.subreddit }}</em><br>
+            <a href="{{ post.url }}" target="_blank">{{ post.url }}</a><br>
+            Sentiment: {{ post.content_sentiment }}
+            {% if post.sentiment_label == "POSITIVE" %}
+              <span class="positive-label">POSITIVE</span>
+            {% elif post.sentiment_label == "NEGATIVE" %}
+              <span class="negative-label">NEGATIVE</span>
+            {% else %}
+              <span class="neutral-label">NEUTRAL</span>
+            {% endif %}
+            <br><br>
+            <strong>Summary:</strong> {{ post.summary }}
+          </li>
+        {% endfor %}
+
+        {% if overall_label %}
+          <p>
+            Overall for this time filter:
+            {% if overall_label == "POSITIVE" %}
+              <span class="positive-label">AVERAGE POSITIVE</span>
+            {% elif overall_label == "NEGATIVE" %}
+              <span class="negative-label">AVERAGE NEGATIVE</span>
+            {% else %}
+              <span class="neutral-label">AVERAGE NEUTRAL</span>
+            {% endif %}
+          </p>
+        {% endif %}
+      </ul>
+    {% else %}
+      <p>No posts to show yet. Submit the form above!!!</p>
+    {% endif %}
+{% endblock %}
