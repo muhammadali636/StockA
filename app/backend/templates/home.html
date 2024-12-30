@@ -1,0 +1,13 @@
+{% extends "layout.html" %}
+
+{% block title %}Home Page{% endblock %}
+
+{% block header %}
+    <h1>Home Page</h1>
+{% endblock %}
+
+{% block content %}
+    <h2>Welcome, {{ session['username'] }}!</h2> 
+    <p>Welcome to home page!</p>
+    <a href="{{ url_for('signout') }}" class="signout">Sign Out</a> 
+{% endblock %}

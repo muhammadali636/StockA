@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+
+{% block title %}Registration Page{% endblock %}
+
+{% block header %}
+    <h1>Register Page</h1>
+{% endblock %}
+
+{% block content %}
+    <h2>Create a New Account</h2>
+
+    <form action="{{ url_for('register') }}" method="post">
+        <div>
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required>
+        </div>
+
+        <div>
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" required>
+        </div>
+
+        <button type="submit">Register</button>
+    </form>
+
+    <br>
+    <a href="{{ url_for('login') }}">Already have an account? Login here</a>
+{% endblock %}
