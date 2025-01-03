@@ -1,0 +1,2 @@
+[console_scripts]
+gemini = gemini.cli:main

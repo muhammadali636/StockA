@@ -2,7 +2,9 @@ This project is a Python-based tool designed to fetch and analyze Reddit posts r
 
 Next steps: fix scraper. for the web app: search, metrics, plot (for later), sentiments, summarizer (premium)
 the openai api parts and functions are done but openai is no longer free so save for a future premium version.
-
+add r/stocks
+Url colors on footer. 
+pytest.
 
 
 
