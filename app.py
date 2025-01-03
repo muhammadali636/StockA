@@ -4,13 +4,14 @@ import os
 from werkzeug.security import generate_password_hash, check_password_hash #password hashing
 from dotenv import load_dotenv #.env secret key
 
-#TODO: put script in /home route and move from HTML and templates --> JSX.
+#current just user auth, sessions, logging. 
+#TODO: fix up scraper. its bad.
 
 app = Flask(__name__) #flask instance
 
 app.secret_key = os.getenv('SECRET_KEY') #random number key i stored in .env file. 
 
-#mongodb connection
+#mongodb connection working on using postgre instead but this works.
 client = MongoClient('mongodb://localhost:27017/proj')
 mongo = client['proj']
 collection = mongo['users']
@@ -60,13 +61,56 @@ def login():
 
     return render_template('login.html')
 
-# Home route (authentication check)
+#Home route (authentication check)
 @app.route('/home', methods=['GET', 'POST'])
 def home():
     if 'username' not in session:
         flash('You must be logged in to access this page.', 'danger')
         return redirect(url_for('login'))  #REDIRECT TO LOGIN
     return render_template('home.html')
+
+
+@app.route('/home', methods=['GET', 'POST'])
+def home():
+    if 'username' not in session:
+        flash('You must be logged in to access this page.', 'danger')
+        return redirect(url_for('login'))
+
+    posts_data = []
+    metrics = {}
+    overall_sentiment_label = None  # To store overall sentiment
+    summary = ""  # To store summary if enabled
+
+    if request.method == 'POST':
+        #get form data
+        stock = request.form.get('stock', '').strip().upper()
+        time_filter = request.form.get('time_filter', '').strip().lower()
+        selected_subreddits = request.form.getlist('subreddits')
+
+        if not selected_subreddits:
+            flash('Please select at least one subreddit.', 'warning')
+        elif not stock:
+            flash('Please enter a stock symbol.', 'warning')
+        else:
+            #call scrape_posts with the provided data
+
+            #posts_data, metrics, overall_sentiment_label, summary = scrape_posts(
+            #   stock, time_filter, selected_subreddits
+            #)
+            posts_data, metrics, overall_sentiment_label = scrape_posts(
+                stock, time_filter, selected_subreddits
+            )
+            #summarize openai, you can call it here:
+            #summary = summarize_posts(posts_data, stock)
+
+            #nno posts or metrics found flash warning
+            if not posts_data and not metrics:
+                flash('No valid posts found or invalid inputs.', 'warning')
+    return render_template('home.html',
+                           posts_data=posts_data,
+                           metrics=metrics,
+                           overall_label=overall_sentiment_label,
+                           summary=summary) 
 
 #SIGNOUT AND CLEAR SESSION
 @app.route('/signout', methods=['GET', 'POST'])

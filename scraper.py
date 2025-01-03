@@ -1,69 +1,126 @@
-import requests
+
+import requests 
 from urllib.parse import quote
 import yfinance as yf
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import nltk
 import time
-from transformers import pipeline
 from langdetect import detect
 
-#make sure VADER lexicon is downloaded. Use nltk.download() in Python with/without Jupyter:
-nltk.download('vader_lexicon') 
-#init sentiment analyzer
-sia = SentimentIntensityAnalyzer() 
+#import openai premium.
+import os
 
-#Init Hugging Face zero-shot classification model.
-classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
+nltk.download('vader_lexicon')#download vader for sent analysis.
+VADER = SentimentIntensityAnalyzer()        #sent analysis.
 
-#headers so it looks like an agent. Makes sure reddit doesnt block us.
-headers = {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) AppleWebKit/601.3.9 (KHTML, like Gecko) Version/9.0.2 Safari/601.3.9'
-}
+#openai.api_key = os.getenv("OPENAI_API_KEY") save this for later since its not free anymore. Perhaps a premium version because openai no longer free. Or use a free LLM.
+#get stock metrics including average daily change and last close value
+def get_stock_metrics(ticker, period='1mo'):
+    df = yf.download(ticker, period=period, interval='1d', progress=False)
+    if len(df) == 0:
+        return {}
+    
+    df['DailyChange'] = df['Close'].pct_change()
+    last_close_value = float(df['Close'][len(df) - 1]) 
+    avg_daily_change = sum(df['DailyChange']) / len(df['DailyChange']) * 100.0
 
-#functions
+    return {
+        'avg_daily_change': avg_daily_change, 
+        'last_close': last_close_value
+    }
 
-#Checks if stock is a valid ticker from yfinance. 
+#function to check if user entered ticker symbol is valid using yfin API
 def is_valid_ticker(ticker):
     try:
         stock = yf.Ticker(ticker.upper())
         return stock.info.get('symbol', '').upper() == ticker.upper()
     except Exception as e:
-        print(e) #print exception 
+        print("Error validating the ticker:", e)
         return False
 
-#Get posts from a subreddit
-def fetch_reddit_posts(stock, time_filter, subreddit):
-    url = f'https://www.reddit.com/r/{subreddit}/search.json?q={quote(stock)}&sort=top&t={time_filter}&limit=50'
-    try:
-        response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
-        if response.status_code != 200:
-            print(response.status_code)
-            return []
-        return response.json().get('data', {}).get('children', [])
-    #network error
-    except requests.exceptions.RequestException as e: 
-        print(e)  #prints just the exception message
-    #error decoding json
-    except ValueError as e:
-        print(e)  
-    #other exceptions.
-    except Exception as e:
-        print(e)  
-    return []
-#filter posts for relevance using Hugging Face zero-shot classification
-def is_relevant(content, stock):
-    labels = [f"related to {stock} stock analysis", "not related to stock analysis"]
-    result = classifier(content, labels)
-    return result["labels"][0] == f"related to {stock} stock analysis"
+#relevancy to specified stock can also modify this to look for due diligence specifically on reddit (prob a better idea tbh.) 
+#def is_relevant(content, stock):
+#         stream = client.chat.completions.create(
+#             model="gpt-4o", 
+#             messages=[
+#                 {"role": "system", "content": "classify text as relevant or not to a stock."},
+#                 {"role": "user", "content": f"Is this text about {stock} stock?\n{content}\n."}
+#             ],
+#             stream = True,
 
-#check if content is in English (a constraint)
+#Summarizes multiple posts into one paragraph 
+#TODO might have 10000 posts and chatgpt has a limit, limit this to the recent 100 posts. or we can filter better for due diligence (see above)
+#def summarize_posts(posts, stock):
+#         combined_content = " ".join([f"{post['title']}. {post['content_sentiment']['compound']}" for post in posts])
+#         stream = client.chat.completions.create(
+#             model="gpt-4o",
+#             messages=[
+#                 {"role": "system", "content": "You summarize text."},
+#                 {"role": "user", "content": f"Summarize posts about {stock}: {combined_content}"}
+#             ],
+#             stream=True,
+
+#VADER sentiment (neg, neu, pos, compound) and conver t that to either POSITIVE, NEGATIVE, NEUTRAL.
+def label_sentiment(sentiment_dict):
+    compound = sentiment_dict.get('compound', 0.0)
+    if compound >= 0.05:
+        return "POSITIVE"
+    elif compound <= -0.05:
+        return "NEGATIVE"
+    else:
+        return "NEUTRAL"
+
+#get posts from a specific subreddit based on the stock ticker and time filter
+def fetch_reddit_posts(stock, subreddit, time_filter="all", sort="top", max_results=1000, per_page=100):
+    base_url = "https://www.reddit.com/r/{}/search.json".format(subreddit)
+    all_posts = []
+    after = None
+
+    while True:
+        params = {
+            "q": stock,
+            "restrict_sr": "true",
+            "sort": sort,
+            "t": time_filter,
+            "limit": per_page,
+        }
+        if after:
+            params["after"] = after
+        try:
+            response = requests.get(
+                base_url,
+                headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) AppleWebKit/601.3.9 (KHTML, like Gecko) Version/9.0.2 Safari/601.3.9'},
+                params=params
+            )
+            if response.status_code != 200:
+                print(f"Error {response.status_code} in r/{subreddit}")
+                break
+            data = response.json().get("data", {})
+            children = data.get("children", [])
+            if not children:
+                break
+            all_posts.extend(children)
+            if len(all_posts) >= max_results:
+                print(f"Reached max_results: {max_results}")
+                break
+            after = data.get("after")
+            if not after:
+                break
+            time.sleep(1.0)  #prevent rate-limiting by Reddit stay stealthy.
+
+        except Exception as e:
+            print(f"Error fetching from subreddit '{subreddit}':", e)
+            break
+    return all_posts[:max_results]
+
+#only english via langdetect lib.
 def is_english(content):
     try:
         return detect(content) == "en"
     except:
         return False
 
-#remove dupes posts based on the URL.
+#dupe post remover.
 def remove_dupes(posts):
     unique_urls = set()
     unique_posts = []
@@ -73,81 +130,59 @@ def remove_dupes(posts):
             unique_posts.append(post)
     return unique_posts
 
-#main
-def main():
-    while (True):
-        stock = input("Enter the stock symbol or keyword to search: ").strip().upper()
-        time_filter = input("Enter time filter (day, week, month, year, all): ").strip().lower()
+def scrape_posts(stock, time_filter, subreddits):
+    # Validate time_filter
+    if time_filter not in ["day", "week", "month", "year", "all"]:
+        print("Invalid time filter.")
+        return [], {}, None
 
-        if time_filter not in ["day", "week", "month", "year", "all"] or not is_valid_ticker(stock):
-            print("Invalid input. Please try again.")
-            continue
-        break
+    #validate ticker
+    if not is_valid_ticker(stock):
+        print("Invalid Ticker Symbol.")
+        return [], {}, None
 
-    subreddits = [
-        'wallstreetbets', 'pennystocks', 'valueinvesting',
-        'investing', 'stockmarket', 'stocksandtrading',
-        'robinhoodpennystocks', 'wallstreetbetselite', 
-        'shortsqueeze', 'dividends'
-    ]
+    metrics = get_stock_metrics(stock, period='1mo')
     posts_data = []
+    all_compounds = []
 
     for subreddit in subreddits:
-        print(f"\nSearching in r/{subreddit}...")
-        posts = fetch_reddit_posts(stock, time_filter, subreddit)
-
-        for post in posts:
-            post_data = post.get('data', {})
+        raw_posts = fetch_reddit_posts(
+            stock=stock,
+            subreddit=subreddit,
+            time_filter=time_filter,
+            sort="top",
+            max_results=1000
+        )
+        for rp in raw_posts:
+            post_data = rp.get('data', {})
             title = post_data.get('title', 'No Title')
-            post_url = f"https://www.reddit.com{post_data.get('permalink', '')}"
+            permalink = post_data.get('permalink', '')
+            post_url = f"https://www.reddit.com{permalink}"
             content = post_data.get('selftext', 'No Content')
 
-            #skip posts with no content or less than 50 words (nonsense posts).
-            #TODO: for future, perhaps we shouldnt hardcode this. 
+            #skip any posts with insufficient content or non-English text
             if content == 'No Content' or len(content.split()) < 50:
                 continue
-
-            #skip anything that isnt english
             if not is_english(content):
-                print(f"...")
                 continue
 
-            #skip posts that arent relevant to the stock using Hugging Face model (transformers)
-            if not is_relevant(content, stock):
-                print(f"...")
-                continue
+            #LATER: to filter with  relevancy constraints:
+            # if not is_relevant(content, stock):
+            #     continue
 
-            #analyze content sentiment for post that made it.
-            content_sentiment = sia.polarity_scores(content)
+            sentiment_dict = VADER.polarity_scores(content)
+            sentiment_label = label_sentiment(sentiment_dict)
+            all_compounds.append(sentiment_dict['compound'])
 
-            #append data
             posts_data.append({
                 'subreddit': subreddit,
                 'title': title,
                 'url': post_url,
-                'content_sentiment': content_sentiment
+                'content_sentiment': sentiment_dict,
+                'sentiment_label': sentiment_label
             })
+        time.sleep(1.0)  #avoid Reddit rate-limiting stay stealthy.
 
-        time.sleep(2) #so i dont get blocked.
-
-    #remove dupes
     posts_data = remove_dupes(posts_data)
-
-    #display if found
-    if posts_data:
-        print("\n--- Analysis Results ---\n")
-        for post in posts_data:
-            print(f"Subreddit: r/{post['subreddit']}")
-            print(f"Title: {post['title']}")
-            print(f"Post URL: {post['url']}")
-            print(f"Content Sentiment: {post['content_sentiment']}")
-            print("-" * 80)
-    #if nothing is found
-    else:
-        print("\nNo valid posts found.")
-
-main()
-
-
 
 
