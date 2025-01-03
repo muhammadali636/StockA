@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+
+{% block title %}Login Page{% endblock %}
+
+{% block header %}
+    <h1>Login Page</h1>
+{% endblock %}
+
+{% block content %}
+    <h2>Login to Your Account</h2>
+
+    <form action="{{ url_for('login') }}" method="post" id="loginForm">
+        <div>
+            <label for="username">Username:</label>
+            <input type="text" id="loginUsername" name="username" required>
+        </div>
+
+        <div>
+            <label for="password">Password:</label>
+            <input type="password" id="loginPassword" name="password" required>
+            <input type="checkbox" id="toggleLoginPassword"> Show Password
+        </div>
+
+        <button type="submit">Login</button>
+    </form>
+
+    <br>
+    <div class="white-bg">
+        <a href="{{ url_for('register') }}">Don't have an account? Register here.</a>
+    </div>
+{% endblock %}

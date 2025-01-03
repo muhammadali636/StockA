@@ -1,0 +1,23 @@
+{% extends "layout.html" %}
+{% block title %}Update Password{% endblock %}
+{% block header %}
+    <h1>Update Password</h1>
+{% endblock %}
+
+{% block content %}
+    <form action="{{ url_for('update') }}" method="post" id="updateForm">
+        <div>
+            <label for="old_password">Old Password:</label>
+            <input type="password" id="oldPassword" name="old_password" required>
+        </div>
+        <div>
+            <label for="new_password">New Password:</label>
+            <input type="password" id="newPassword" name="new_password" required>
+        </div>
+        <div>
+            <label for="confirm_password">Confirm New Password:</label>
+            <input type="password" id="confirmPassword" name="confirm_password" required>
+        </div>
+        <button type="submit">Update</button>
+    </form>
+{% endblock %}
