@@ -1,5 +1,3 @@
-<!-- home.html -->
-
 {% extends "layout.html" %}
 
 {% block title %}Home Page{% endblock %}
@@ -72,9 +70,8 @@
     {% if plot %}
       <h3>Visual Analysis</h3>
       <div style="text-align: center;">
-        <h4>Empty Plot</h4>
-        <p>This is an empty plot placeholder.</p>
-        <img src="{{ url_for('static', filename=plot) }}" alt="Empty Plot" style="max-width:80%; height:auto;">
+        <h4>Total Posts per Month</h4>
+        <img src="{{ url_for('static', filename=plot) }}" alt="Total Posts per Month" style="max-width:80%; height:auto;">
       </div>
     {% endif %}
 

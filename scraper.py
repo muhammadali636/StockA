@@ -1,41 +1,83 @@
-
-import requests 
-from urllib.parse import quote
+import requests
 import yfinance as yf
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import nltk
 import time
 from langdetect import detect
-
+import pandas as pd
+from collections import defaultdict
+from datetime import datetime, timedelta
 #import openai premium.
-import os
+
 
 nltk.download('vader_lexicon')#download vader for sent analysis.
-VADER = SentimentIntensityAnalyzer()        #sent analysis.
+sia = SentimentIntensityAnalyzer()  #sent analysis.
 
 #openai.api_key = os.getenv("OPENAI_API_KEY") save this for later since its not free anymore. Perhaps a premium version because openai no longer free. Or use a free LLM.
 #get stock metrics including average daily change and last close value
-def get_stock_metrics(ticker, period='1mo'):
-    df = yf.download(ticker, period=period, interval='1d', progress=False)
-    if len(df) == 0:
-        return {}
-    
-    df['DailyChange'] = df['Close'].pct_change()
-    last_close_value = float(df['Close'][len(df) - 1]) 
-    avg_daily_change = sum(df['DailyChange']) / len(df['DailyChange']) * 100.0
+def get_stock_metrics(ticker, period='3mo'):
+    df_today = yf.download(ticker, period='1d', interval='1d', progress=False)
+    if df_today.empty:
+        current_total_volume = 0
+        stock_price_today = 0.0
+    else:
+        current_total_volume = int(df_today['Volume'].iloc[-1])
+        stock_price_today = float(df_today['Close'].iloc[-1])
+
+    today = datetime.now().date()
+    target_date = today - timedelta(days=31)
+    df_past = yf.download(
+        ticker,
+        start=(target_date - timedelta(days=1)).strftime('%Y-%m-%d'),
+        end=(today + timedelta(days=1)).strftime('%Y-%m-%d'),
+        interval='1d',
+        progress=False
+    )
+
+    if df_past.empty:
+        close_past = 0.0
+        volume_past = 0.0
+    else:
+        df_past_filtered = df_past[df_past.index.date <= target_date]
+        if df_past_filtered.empty:
+            close_past = 0.0
+            volume_past = 0.0
+        else:
+            closest_date = df_past_filtered.index.max()
+            close_past = float(df_past['Close'].loc[closest_date])
+            volume_past = float(df_past['Volume'].loc[closest_date])
+
+    if close_past != 0:
+        stock_price_change_pct = ((stock_price_today - close_past) / close_past) * 100.0
+    else:
+        stock_price_change_pct = 0.0
+
+    if volume_past != 0:
+        volume_change_pct = ((current_total_volume - volume_past) / volume_past) * 100.0
+    else:
+        volume_change_pct = 0.0
+
+    df_period = yf.download(ticker, period=period, interval='1d', progress=False)
+    if df_period.empty or len(df_period) < 2:
+        avg_daily_change = 0.0
+    else:
+        avg_daily_change = df_period['Close'].pct_change().mean() * 100.0
 
     return {
-        'avg_daily_change': avg_daily_change, 
-        'last_close': last_close_value
+        'avg_daily_change': round(avg_daily_change, 2),
+        'stock_price': round(stock_price_today, 2),
+        'current_total_volume': current_total_volume,
+        'volume_change_pct': round(volume_change_pct, 2),
+        'stock_price_change_pct': round(stock_price_change_pct, 2)
     }
 
 #function to check if user entered ticker symbol is valid using yfin API
 def is_valid_ticker(ticker):
     try:
         stock = yf.Ticker(ticker.upper())
-        return stock.info.get('symbol', '').upper() == ticker.upper()
-    except Exception as e:
-        print("Error validating the ticker:", e)
+        symbol = stock.info.get('symbol', '')
+        return isinstance(symbol, str) and symbol.upper() == ticker.upper()
+    except:
         return False
 
 #relevancy to specified stock can also modify this to look for due diligence specifically on reddit (prob a better idea tbh.) 
@@ -61,21 +103,19 @@ def is_valid_ticker(ticker):
 #             stream=True,
 
 #VADER sentiment (neg, neu, pos, compound) and conver t that to either POSITIVE, NEGATIVE, NEUTRAL.
-def label_sentiment(sentiment_dict):
-    compound = sentiment_dict.get('compound', 0.0)
-    if compound >= 0.05:
+def label_sentiment(compound_score):
+    if compound_score > 0.5:
         return "POSITIVE"
-    elif compound <= -0.05:
+    elif compound_score < -0.5:
         return "NEGATIVE"
     else:
         return "NEUTRAL"
 
 #get posts from a specific subreddit based on the stock ticker and time filter
 def fetch_reddit_posts(stock, subreddit, time_filter="all", sort="top", max_results=1000, per_page=100):
-    base_url = "https://www.reddit.com/r/{}/search.json".format(subreddit)
+    base_url = f"https://www.reddit.com/r/{subreddit}/search.json"
     all_posts = []
     after = None
-
     while True:
         params = {
             "q": stock,
@@ -87,13 +127,8 @@ def fetch_reddit_posts(stock, subreddit, time_filter="all", sort="top", max_resu
         if after:
             params["after"] = after
         try:
-            response = requests.get(
-                base_url,
-                headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) AppleWebKit/601.3.9 (KHTML, like Gecko) Version/9.0.2 Safari/601.3.9'},
-                params=params
-            )
+            response = requests.get(base_url, headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) AppleWebKit/601.3.9 (KHTML, like Gecko) Version/9.0.2 Safari/601.3.9'}, params=params)
             if response.status_code != 200:
-                print(f"Error {response.status_code} in r/{subreddit}")
                 break
             data = response.json().get("data", {})
             children = data.get("children", [])
@@ -101,15 +136,12 @@ def fetch_reddit_posts(stock, subreddit, time_filter="all", sort="top", max_resu
                 break
             all_posts.extend(children)
             if len(all_posts) >= max_results:
-                print(f"Reached max_results: {max_results}")
                 break
             after = data.get("after")
             if not after:
                 break
-            time.sleep(1.0)  #prevent rate-limiting by Reddit stay stealthy.
-
-        except Exception as e:
-            print(f"Error fetching from subreddit '{subreddit}':", e)
+            time.sleep(1.0)#prevent rate-limiting by Reddit stay stealthy.
+        except:
             break
     return all_posts[:max_results]
 
@@ -125,40 +157,34 @@ def remove_dupes(posts):
     unique_urls = set()
     unique_posts = []
     for post in posts:
-        if post['url'] not in unique_urls:
-            unique_urls.add(post['url'])
+        post_url = post.get('url')
+        if post_url and post_url not in unique_urls:
+            unique_urls.add(post_url)
             unique_posts.append(post)
     return unique_posts
 
-def scrape_posts(stock, time_filter, subreddits):
-    # Validate time_filter
+#post scraper
+def scrape_posts(stock, time_filter, subreddits, period):
+    #validate time_filter
     if time_filter not in ["day", "week", "month", "year", "all"]:
-        print("Invalid time filter.")
         return [], {}, None
-
-    #validate ticker
+    period = '5d' if time_filter in ['day', 'week'] else '1mo' if time_filter == 'month' else '1y' if time_filter == 'year' else 'max'
     if not is_valid_ticker(stock):
-        print("Invalid Ticker Symbol.")
         return [], {}, None
-
-    metrics = get_stock_metrics(stock, period='1mo')
+    metrics = get_stock_metrics(stock, period=period)
+    if not metrics:
+        return [], {}, None
     posts_data = []
     all_compounds = []
-
     for subreddit in subreddits:
-        raw_posts = fetch_reddit_posts(
-            stock=stock,
-            subreddit=subreddit,
-            time_filter=time_filter,
-            sort="top",
-            max_results=1000
-        )
+        raw_posts = fetch_reddit_posts(stock, subreddit, time_filter, "top", 1000, 100)
         for rp in raw_posts:
             post_data = rp.get('data', {})
             title = post_data.get('title', 'No Title')
             permalink = post_data.get('permalink', '')
             post_url = f"https://www.reddit.com{permalink}"
             content = post_data.get('selftext', 'No Content')
+            created_utc = post_data.get('created_utc', 0)
 
             #skip any posts with insufficient content or non-English text
             if content == 'No Content' or len(content.split()) < 50:
@@ -166,23 +192,27 @@ def scrape_posts(stock, time_filter, subreddits):
             if not is_english(content):
                 continue
 
-            #LATER: to filter with  relevancy constraints:
+
+            #LATER: to filter with  relevancy constraints using openAI, pretrained model etc:
             # if not is_relevant(content, stock):
             #     continue
 
-            sentiment_dict = VADER.polarity_scores(content)
-            sentiment_label = label_sentiment(sentiment_dict)
+            sentiment_dict = sia.polarity_scores(content)
+            sentiment_label = label_sentiment(sentiment_dict['compound'])
             all_compounds.append(sentiment_dict['compound'])
-
+            post_date = datetime.utcfromtimestamp(created_utc).date()
             posts_data.append({
                 'subreddit': subreddit,
                 'title': title,
                 'url': post_url,
-                'content_sentiment': sentiment_dict,
-                'sentiment_label': sentiment_label
+                'compound_score': sentiment_dict['compound'],
+                'content_sentiment': sentiment_label,
+                'date': post_date
             })
-        time.sleep(1.0)  #avoid Reddit rate-limiting stay stealthy.
+        time.sleep(1.0) #avoid Reddit rate-limiting stay stealthy.
+    posts_data = remove_dupes(posts_data)#make sure we dont have dupes.
+    overall_label = label_sentiment(sum(all_compounds) / len(all_compounds)) if all_compounds else None
 
-    posts_data = remove_dupes(posts_data)
+    return posts_data, metrics, overall_label
 
 
