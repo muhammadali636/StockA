@@ -2,30 +2,30 @@ from flask import Flask, redirect, render_template, url_for, request, flash, ses
 import os
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
-from dotenv import load_dotenv#.env secret key, need for mongo but might change later.
-from scraper import scrape_posts
+from dotenv import load_dotenv
+from scraper import scrape_posts, generate_post_counts_stock_plot
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use('Agg')  # Use Agg backend for headless environments
 import matplotlib.pyplot as plt
 from datetime import datetime
 from collections import defaultdict
 import yfinance as yf
 import pandas as pd
-import numpy as np
 
+#.env secret key, need for mongo but might change later.
 load_dotenv()
 
 #flask instance
 app = Flask(__name__)
-
 #random number key i stored in .env file.
 app.secret_key = os.getenv('SECRET_KEY', 'some_default_secret')
 
-#mongodb connection working on using postgre instead but this works.
-client = MongoClient('mongodb://localhost:27017/proj')
+client = MongoClient('mongodb://localhost:27017/proj') #mongodb connection WORKS but TODO: switch to postgre instead but this works.
+
 mongo = client['proj']
 collection = mongo['users']
 
+#tme filter maps
 TIME_FILTER_MAPPING = {
     'day': '5d',
     'week': '5d',
@@ -34,12 +34,12 @@ TIME_FILTER_MAPPING = {
     'all': 'max'
 }
 
-#REGISTRATION
+#REG
 @app.route('/', methods=['GET', 'POST'])
 def register():
-    #set the username and password from the form.
     if request.method == 'POST':
-        username = request.form['username']
+        #set the username and password from the form.
+        username = request.form['username'].strip()
         password = request.form['password']
         #check if user exists.
         if collection.find_one({'username': username}):
@@ -49,6 +49,7 @@ def register():
             hashed_password = generate_password_hash(password)
             collection.insert_one({'username': username, 'password': hashed_password})
             flash('Registration successful!', 'success')
+            #REDIRECT TO LOGIN
             return redirect(url_for('login'))
     #return render_template('register.html') #get rid of this and the others later for react.
     return render_template('register.html')
@@ -56,15 +57,16 @@ def register():
 #LOGIN
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    #set username and password from post.
     if request.method == 'POST':
-        username = request.form['username']
+        #set username and password from post.
+        username = request.form['username'].strip()
         password = request.form['password']
         #find user by username in db.
         user = collection.find_one({'username': username})
+        #stay on login
         if not user:
             flash('User does not exist.', 'danger')
-            return redirect(url_for('login')) #stay on login
+            return redirect(url_for('login'))
         #check if the password
         if check_password_hash(user['password'], password):
             #store username in session
@@ -80,30 +82,32 @@ def login():
 #Home route (authentication check)
 @app.route('/home', methods=['GET', 'POST'])
 def home():
+    #REDIRECT TO LOGIN
     if 'username' not in session:
         flash('You must be logged in to access this page.', 'danger')
-        #REDIRECT TO LOGIN
         return redirect(url_for('login'))
-    
+
+    #To store overall sentiment
     posts_data = []
     metrics = {}
     overall_sentiment_label = None
+    # store summary if enabled
     plot = None
     total_posts = 0
     timeframe_description = ""
 
-    #To store overall sentiment
-    #To store summary if enabled
     if request.method == 'POST':
         #get form data
         stock = request.form.get('stock', '').strip().upper()
         time_filter = request.form.get('time_filter', '').strip().lower()
         selected_subreddits = request.form.getlist('subreddits')
+
         if not selected_subreddits:
             flash('Please select at least one subreddit.', 'warning')
         elif not stock:
             flash('Please enter a stock symbol.', 'warning')
         else:
+            #validate time_filter
             period = TIME_FILTER_MAPPING.get(time_filter, '1mo')
             try:
                 #call scrape_posts with the provided data
@@ -124,42 +128,11 @@ def home():
                     timeframe_description = "1 Year"
                 else:
                     timeframe_description = "All Time"
-
-                post_counts_by_month = defaultdict(int)
-                for post in posts_data:
-                    post_date = post.get('date')
-                    if post_date:
-                        month = post_date.strftime('%Y-%m')
-                        post_counts_by_month[month] += 1
-
-                today = datetime.today()
-                months = [(today - pd.DateOffset(months=i)).strftime('%Y-%m') for i in range(11, -1, -1)]
-
-                stock_df = yf.download(stock, period='1y', interval='1mo', progress=False)
-                if not stock_df.empty:
-                    stock_df = stock_df.reset_index()
-                    stock_df['Month'] = stock_df['Date'].dt.strftime('%Y-%m')
-                    close_price_by_month = stock_df.set_index('Month')['Close'].to_dict()
-                    avg_volume_by_month = stock_df.groupby('Month')['Volume'].mean().to_dict()
-                    post_counts = [post_counts_by_month.get(month, 0) for month in months]
-                    avg_volumes = [avg_volume_by_month.get(month, 0) / 10000 for month in months]
-                    close_prices = [close_price_by_month.get(month, np.nan) for month in months]
-                    for i in range(len(close_prices)):
-                        if np.isnan(close_prices[i]):
-                            if i > 0:
-                                close_prices[i] = close_prices[i-1]
-                            else:
-                                close_prices[i] = 0
-                else:
-                    post_counts = [0] * 12
-                    avg_volumes = [0] * 12
-                    close_prices = [0] * 12
-
-                fig, ax = plt.subplots(figsize=(10, 5))
-                ax.set_title('Empty Plot')
-                plt.savefig('static/plot.png')
-                plt.close()
-                plot = 'plot.png'
+                try:
+                    plot = generate_post_counts_stock_plot(posts_data, stock)
+                except Exception as e:
+                    flash(f'An error occurred while generating the plot: {e}', 'danger')
+                    plot = None
     return render_template('home.html',
                            posts_data=posts_data,
                            metrics=metrics,
@@ -173,21 +146,21 @@ def home():
 def signout():
     #pop username from sesh to logout.
     session.pop('username', None)
-    #redirect to login after signout
     flash('You have been logged out.', 'success')
+    #redirect to login after signout
     return redirect(url_for('login'))
 
 #DELETE ACCOUNT
 @app.route('/delete', methods=['GET', 'POST'])
 def delete():
+    #REDIRECT TO LOGIN
     if 'username' not in session:
         flash('You must be logged in to delete your account.', 'danger')
-        #redirect to login
         return redirect(url_for('login'))
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
         #find user via username on db.
+        username = request.form['username'].strip()
+        password = request.form['password']
         user = collection.find_one({'username': username})
         #is password right?
         if user and check_password_hash(user['password'], password):
@@ -195,6 +168,7 @@ def delete():
             collection.delete_one({'username': username})
             session.pop('username', None)
             flash('Account deleted successfully.', 'success')
+            #REDIRECT TO LOGIN
             return redirect(url_for('login'))
         else:
             flash('Invalid username or password.', 'danger')
@@ -203,6 +177,7 @@ def delete():
 #UPDATE PASS
 @app.route('/update', methods=['GET', 'POST'])
 def update():
+    #REDIRECT TO LOGIN
     if 'username' not in session:
         flash('You must be logged in to update your password.', 'danger')
         return redirect(url_for('login'))
@@ -212,11 +187,14 @@ def update():
         confirm_password = request.form['confirm_password']
         username = session['username']
         user = collection.find_one({'username': username})
+        #check if the old password is correct
         if user and check_password_hash(user['password'], old_password):
+            #update the password if confirmation matches
             if new_password == confirm_password:
                 hashed_password = generate_password_hash(new_password)
                 collection.update_one({'username': username}, {'$set': {'password': hashed_password}})
                 flash('Password updated!', 'success')
+                #return to home page on success
                 return redirect(url_for('home'))
             else:
                 flash('New passwords do not match.', 'danger')
@@ -225,4 +203,7 @@ def update():
     return render_template('update.html')
 
 if __name__ == "__main__":
+    # Ensure the 'static' directory exists
+    if not os.path.exists('static'):
+        os.makedirs('static')
     app.run(debug=True)

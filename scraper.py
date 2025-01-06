@@ -7,14 +7,23 @@ from langdetect import detect
 import pandas as pd
 from collections import defaultdict
 from datetime import datetime, timedelta
-#import openai premium.
+import matplotlib
+matplotlib.use('Agg')  
+import matplotlib.pyplot as plt
 
+#TODO: FIX PLOTS and add second plot to compare volume (more meaninful)
+#TODO: code getting bigger   make new files for plots 1 and 2. 
 
 nltk.download('vader_lexicon')#download vader for sent analysis.
-sia = SentimentIntensityAnalyzer()  #sent analysis.
-
-#openai.api_key = os.getenv("OPENAI_API_KEY") save this for later since its not free anymore. Perhaps a premium version because openai no longer free. Or use a free LLM.
-#get stock metrics including average daily change and last close value
+VADER = SentimentIntensityAnalyzer()#sent analy sis.
+TIME_FILTER_MAPPING = {
+    'day': '5d',
+    'week': '5d',
+    'month': '1mo',
+    'year': '1y',
+    'all': 'max'
+}
+        #       get stock metrics + average daily change + last close value
 def get_stock_metrics(ticker, period='3mo'):
     df_today = yf.download(ticker, period='1d', interval='1d', progress=False)
     if df_today.empty:
@@ -71,7 +80,7 @@ def get_stock_metrics(ticker, period='3mo'):
         'stock_price_change_pct': round(stock_price_change_pct, 2)
     }
 
-#function to check if user entered ticker symbol is valid using yfin API
+#       func to check if user entered ticker symbol is valid using yfin API
 def is_valid_ticker(ticker):
     try:
         stock = yf.Ticker(ticker.upper())
@@ -79,6 +88,7 @@ def is_valid_ticker(ticker):
         return isinstance(symbol, str) and symbol.upper() == ticker.upper()
     except:
         return False
+
 
 #relevancy to specified stock can also modify this to look for due diligence specifically on reddit (prob a better idea tbh.) 
 #def is_relevant(content, stock):
@@ -102,7 +112,7 @@ def is_valid_ticker(ticker):
 #             ],
 #             stream=True,
 
-#VADER sentiment (neg, neu, pos, compound) and conver t that to either POSITIVE, NEGATIVE, NEUTRAL.
+#VADER sentiment (neg, neu, pos, compound) and conver tthat to either POSITIVE, NEGATIVE, NEUTRAL.
 def label_sentiment(compound_score):
     if compound_score > 0.5:
         return "POSITIVE"
@@ -116,6 +126,7 @@ def fetch_reddit_posts(stock, subreddit, time_filter="all", sort="top", max_resu
     base_url = f"https://www.reddit.com/r/{subreddit}/search.json"
     all_posts = []
     after = None
+    headers = {'User-Agent': 'Mozilla/5.0 (compatible; Bot/0.1)'}
     while True:
         params = {
             "q": stock,
@@ -127,7 +138,7 @@ def fetch_reddit_posts(stock, subreddit, time_filter="all", sort="top", max_resu
         if after:
             params["after"] = after
         try:
-            response = requests.get(base_url, headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) AppleWebKit/601.3.9 (KHTML, like Gecko) Version/9.0.2 Safari/601.3.9'}, params=params)
+            response = requests.get(base_url, headers=headers, params=params)
             if response.status_code != 200:
                 break
             data = response.json().get("data", {})
@@ -140,7 +151,7 @@ def fetch_reddit_posts(stock, subreddit, time_filter="all", sort="top", max_resu
             after = data.get("after")
             if not after:
                 break
-            time.sleep(1.0)#prevent rate-limiting by Reddit stay stealthy.
+            time.sleep(1.0)            #prevent rate-limiting by Reddit stay stealthy.
         except:
             break
     return all_posts[:max_results]
@@ -168,7 +179,7 @@ def scrape_posts(stock, time_filter, subreddits, period):
     #validate time_filter
     if time_filter not in ["day", "week", "month", "year", "all"]:
         return [], {}, None
-    period = '5d' if time_filter in ['day', 'week'] else '1mo' if time_filter == 'month' else '1y' if time_filter == 'year' else 'max'
+    period = TIME_FILTER_MAPPING.get(time_filter, '1mo')
     if not is_valid_ticker(stock):
         return [], {}, None
     metrics = get_stock_metrics(stock, period=period)
@@ -176,6 +187,7 @@ def scrape_posts(stock, time_filter, subreddits, period):
         return [], {}, None
     posts_data = []
     all_compounds = []
+    #relevancy to specified stock can also modify this to look for due diligence specifically on reddit (prob a better idea tbh.)
     for subreddit in subreddits:
         raw_posts = fetch_reddit_posts(stock, subreddit, time_filter, "top", 1000, 100)
         for rp in raw_posts:
@@ -185,19 +197,18 @@ def scrape_posts(stock, time_filter, subreddits, period):
             post_url = f"https://www.reddit.com{permalink}"
             content = post_data.get('selftext', 'No Content')
             created_utc = post_data.get('created_utc', 0)
-
             #skip any posts with insufficient content or non-English text
             if content == 'No Content' or len(content.split()) < 50:
                 continue
             if not is_english(content):
                 continue
 
-
-            #LATER: to filter with  relevancy constraints using openAI, pretrained model etc:
+     #LATER: to filter with  relevancy constraints using TRANSFORMERS BERT   (DONT USE OPENAI HERE) etc:
             # if not is_relevant(content, stock):
             #     continue
 
-            sentiment_dict = sia.polarity_scores(content)
+            sentiment_dict = VADER.polarity_scores(content)
+            #VADER sentiment (neg, neu, pos, compound) and conver tthat to either POSITIVE, NEGATIVE, NEUTRAL.
             sentiment_label = label_sentiment(sentiment_dict['compound'])
             all_compounds.append(sentiment_dict['compound'])
             post_date = datetime.utcfromtimestamp(created_utc).date()
@@ -209,10 +220,82 @@ def scrape_posts(stock, time_filter, subreddits, period):
                 'content_sentiment': sentiment_label,
                 'date': post_date
             })
-        time.sleep(1.0) #avoid Reddit rate-limiting stay stealthy.
-    posts_data = remove_dupes(posts_data)#make sure we dont have dupes.
+        time.sleep(1.0)        #prevent rate-limiting by Reddit stay stealthy.
+    posts_data = remove_dupes(posts_data)
     overall_label = label_sentiment(sum(all_compounds) / len(all_compounds)) if all_compounds else None
-
+    #TODO might have 10000 posts and chatgpt has a limit, limit this to the recent 100 posts. or we can filter better for due diligence (see above)
     return posts_data, metrics, overall_label
 
+def generate_post_counts_stock_plot(posts_data, stock):
+    today = datetime.today()
+    months = [(today - pd.DateOffset(months=i)).strftime('%Y-%m') for i in range(11, -1, -1)]    #gen list of lastt 12 monthss + current month.
+    post_counts_by_month = defaultdict(int)
+    for post in posts_data:
+        post_date = post.get('date')
+        if post_date:
+            month = post_date.strftime('%Y-%m')
+            if month in months:
+                post_counts_by_month[month] += 1
+    post_counts = [post_counts_by_month.get(month, 0) for month in months]
+    stock_df = yf.download(stock, period='1y', interval='1d', progress=False)    #get stock prices at the end of each month
+    if stock_df.empty:
+        stock_prices = [0] * 12
+    else:
+        stock_df = stock_df.reset_index()
+        stock_df['Month'] = stock_df['Date'].dt.strftime('%Y-%m')
+        #last trading day of each month
+        stock_prices_dict = {}
+        for month in months:
+            month_df = stock_df[stock_df['Month'] == month]
+            if not month_df.empty:
+                last_day_close = month_df.iloc[-1]['Close']
+                try:
+                    last_day_close = float(last_day_close)
+                except (ValueError, TypeError):
+                    last_day_close = np.nan
+                stock_prices_dict[month] = last_day_close
+            else:
+                stock_prices_dict[month] = np.nan
+        #rep NaN with previous month's price or 0.
+        stock_prices = []
+        last_valid = 0
+        for month in months:
+            price = stock_prices_dict.get(month, np.nan)
+            try:
+                price = float(price)
+            except (ValueError, TypeError):
+                price = np.nan
+            if np.isnan(price):
+                price = last_valid
+            else:
+                last_valid = price
+            stock_prices.append(price)
 
+    fig, ax1 = plt.subplots(figsize=(12, 6)) #create plot
+
+    #BAR PLOT POST COUNTs
+    ax1.bar(range(len(months)), post_counts, color='skyblue', label='Total Posts')
+    ax1.set_xlabel('Month')
+    ax1.set_ylabel('Total Posts', color='skyblue')
+    ax1.tick_params(axis='y', labelcolor='skyblue')
+    ax1.set_xticks(range(len(months)))
+    ax1.set_xticklabels(months, rotation=45)
+
+    #LINE PLOT PRICE
+    ax2 = ax1.twinx()
+    ax2.plot(range(len(months)), stock_prices, color='orange', marker='o', label='Stock Price')
+    ax2.set_ylabel('Stock Price ($)', color='orange')
+    ax2.tick_params(axis='y', labelcolor='orange')
+    plt.title(f'Total Posts and Stock Price for {stock} Over the Last 12 Months')
+    fig.tight_layout()
+    #combine the legends
+    bars, labels_bars = ax1.get_legend_handles_labels()
+    lines, labels_lines = ax2.get_legend_handles_labels()
+    ax1.legend(bars + lines, labels_bars + labels_lines, loc='upper left')
+
+    #save  
+    plot_filename = 'post_counts_stock_prices.png'
+    plot_path = os.path.join('static', plot_filename)
+    plt.savefig(plot_path)
+    plt.close()
+    return plot_filename
