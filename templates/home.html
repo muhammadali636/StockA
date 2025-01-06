@@ -9,8 +9,7 @@
 {% block content %}
     <h2>Welcome, {{ session['username'] }}!</h2>
     <p>This is the main page. It may take up to a minute to load. Analyze posts for a comprehensive overview.</p>
-
-    <form method="POST">
+    <form method="POST" id="scraperForm">
         <div class="input-group">
             <label for="stock">Stock Symbol:</label>
             <input type="text" id="stock" name="stock" required>
@@ -23,7 +22,7 @@
                 <option value="week">Week</option>
                 <option value="month">Month</option>
                 <option value="year">Year</option>
-                <option value="all">All</option>
+                <option value="all">All (not recommended - slow)</option>
             </select>
         </div>
 
@@ -31,6 +30,7 @@
             <p>Select Subreddits:</p>
             <label><input type="checkbox" name="subreddits" value="wallstreetbets"> r/wallstreetbets</label>
             <label><input type="checkbox" name="subreddits" value="pennystocks"> r/pennystocks</label>
+            <label><input type="checkbox" name="subreddits" value="stocks"> r/stocks</label>
             <label><input type="checkbox" name="subreddits" value="valueinvesting"> r/valueinvesting</label>
             <label><input type="checkbox" name="subreddits" value="investing"> r/investing</label>
             <label><input type="checkbox" name="subreddits" value="stockmarket"> r/stockmarket</label>
@@ -40,66 +40,78 @@
             <label><input type="checkbox" name="subreddits" value="shortsqueeze"> r/shortsqueeze</label>
             <label><input type="checkbox" name="subreddits" value="dividends"> r/dividends</label>
         </div>
-
-        <button type="submit">Analyze</button>
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+          <button type="submit">SEARCH and ANALYZE!</button>
+            <button type="button" id="selectAllBtn">Select All</button>
+            <button type="button" id="deselectAllBtn">Deselect All</button>
+            
+        </div>
     </form>
-    <hr>
-    
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <ul>
-          {% for category, message in messages %}
-            <li class="alert alert-{{ category }}">{{ message }}</li>
-          {% endfor %}
-        </ul>
-      {% endif %}
-    {% endwith %}
     
     {% if metrics %}
-      <h3>Stock Price Metrics</h3>
-      <p><strong>Stock Price:</strong> ${{ metrics['stock_price'] }}</p>
-      <p><strong>Current Day's Volume:</strong> {{ metrics['current_total_volume'] }}</p>
-      <p><strong>Stock Price Change 1 Month:</strong> {{ metrics['stock_price_change_pct'] }}% 
-        <small>(Percentage change in stock closing price compared to 1 month ago)</small></p>
-      
-      <p><strong>Volume Change 1 Month:</strong> {{ metrics['volume_change_pct'] }}%</p>
-      
-      <p><strong>Total Number of Posts within the Searched Timeframe:</strong> {{ total_posts }}</p>
-    {% endif %}
-
-    {% if plot %}
-      <h3>Visual Analysis</h3>
-      <div style="text-align: center;">
-        <h4>Total Posts per Month</h4>
-        <img src="{{ url_for('static', filename=plot) }}" alt="Total Posts per Month" style="max-width:80%; height:auto;">
+      <div data-searched="true">
+        <h3>${{stock}} Metrics</h3>
+        <p><strong>Last Close Price:</strong> ${{ metrics['stock_price'] }}</p>
+        <p><strong>Last Reported Volume:</strong> {{ metrics['current_total_volume'] }}</p>
+        <p><strong>Stock Price Change From Start of Month:</strong> {{ metrics['stock_price_change_pct'] }}%</p>
+        <p><strong>Stock Volume Change From Start of Month:</strong> {{ metrics['volume_change_pct'] }}%</p>
+        <p><strong>Total Number of Posts within the Searched Timeframe:</strong> {{ total_posts }}</p>
       </div>
     {% endif %}
 
-    {% if posts_data %}
-      <h3>Analysis Results</h3>
-      <ul>
-        {% for post in posts_data %}
-          <li style="margin-bottom: 10px;">
-            <strong>{{ post.title }}</strong> | Subreddit: <em>{{ post.subreddit }}</em><br>
-            <div class="white-bg">
-              <a href="{{ post.url }}" target="_blank">{{ post.url }}</a><br>
-            </div>
-            Compound Score: {{ post.compound_score }}<br>
-            Sentiment: 
-            {% if post.content_sentiment == "POSITIVE" %}
-              <span class="positive-label">POSITIVE</span>
-            {% elif post.content_sentiment == "NEGATIVE" %}
-              <span class="negative-label">NEGATIVE</span>
-            {% else %}
-              <span class="neutral-label">NEUTRAL</span>
+    <hr class="search-divider" style="border: none; height: 2px; background-color: mediumblue; margin: 20px 0; display: none;">
+
+    {% if plot_prices or plot_volume %}
+      <div data-searched="true">
+        <h3>${{stock}} Visual Analysis</h3>
+        <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+            {% if plot_prices %}
+                <div style="flex: 1; min-width: 300px; margin-right: 10px;">
+                    <img src="{{ url_for('static', filename=plot_prices) }}" alt="Total Posts and ${{stock}} Monthly Close Price" style="max-width:100%; height:auto;">
+                </div>
             {% endif %}
-          </li>
-        {% endfor %}      
-      </ul>
-      <hr>
-      <h3>Summary</h3>
-      <p>Still working on this.</p>
+            
+            {% if plot_volume %}
+                <div style="flex: 1; min-width: 300px; margin-left: 10px;">
+                    <img src="{{ url_for('static', filename=plot_volume) }}" alt="Total Posts and ${{stock}} Monthly Average Volume" style="max-width:100%; height:auto;">
+                </div>
+            {% endif %}
+        </div>
+      </div>
+    {% endif %}
+
+    <hr class="search-divider" style="border: none; height: 2px; background-color: mediumblue; margin: 20px 0; display: none;">
+
+    {% if posts_data %}
+      <div data-searched="true">
+        <h3>{{ timeframe_description }} Post Search Results and Sentiment Analysis for ${{stock}} </h3>
+        <ul>
+          {% for post in posts_data %}
+            <li style="margin-bottom: 10px;">
+              <strong>{{ post.title }}</strong> | Subreddit: <em>{{ post.subreddit }}</em> | Date: <em>{{ post.date }}</em>
+              <br>
+              <div class="white-bg">
+                <a href="{{ post.url }}" target="_blank">{{ post.url }}</a><br>
+              </div>
+              Compound Score: {{ post.compound_score }}<br>
+              Sentiment: 
+              {% if post.content_sentiment == "POSITIVE" %}
+                <span class="positive-label">POSITIVE</span>
+              {% elif post.content_sentiment == "NEGATIVE" %}
+                <span class="negative-label">NEGATIVE</span>
+              {% else %}
+                <span class="neutral-label">NEUTRAL</span>
+              {% endif %}
+            </li>
+          {% endfor %}      
+        </ul>
+        
+        <hr class="search-divider" style="border: none; height: 2px; background-color: mediumblue; margin: 20px 0; display: none;">
+
+        <h3>Summary of Posts on ${{stock}}</h3>
+        <p>Still working on this. Probably a future premium feature since OpenAI api is no longer free</p>
+      </div>
     {% else %}
-      <p>No posts to show yet. Submit the form above!</p>
+      <p>No posts to show. Perhaps nothing was found or you did not submit the form properly!</p>
     {% endif %}
 {% endblock %}

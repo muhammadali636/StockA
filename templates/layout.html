@@ -28,12 +28,12 @@
     <footer>
         <p>Stock Scraper and Sentiment Analysis. This is a tool, not a substitute for financial advice or decision-making. Use Responsibly.</p>
         {% if 'username' in session %}
-            <a href="{{ url_for('update') }}" class="update">Update Password</a> |
-            <a href="{{ url_for('delete') }}" class="delete">Delete Account</a> |
-            <a href="{{ url_for('signout') }}" class="signout">Sign Out</a>
+        <a href="{{ url_for('update') }}" class="whiten">Update Password</a> |
+        <a href="{{ url_for('delete') }}" class="whiten">Delete Account</a> |
+        <a href="{{ url_for('signout') }}" class="whiten">Sign Out</a>
         {% else %}
-            <a href="{{ url_for('login') }}" class="login">Login</a> |
-            <a href="{{ url_for('register') }}" class="register">Register</a>
+            <a href="{{ url_for('login') }}" class="whiten">Login</a> |
+            <a href="{{ url_for('register') }}" class="whiten">Register</a>
         {% endif %}
     </footer>
 
