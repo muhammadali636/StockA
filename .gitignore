@@ -1,0 +1,10 @@
+#do not git these
+*.pyc
+__pycache__/
+.env
+venv/
+db.sqlite3
+staticfiles/
+media/
+.DS_Store
+Thumbs.db
