@@ -1,10 +1,12 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}User Auth{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Use Django static for your stylesheet -->
+    <link rel="stylesheet" href="{% static 'style.css' %}">
 </head>
 <body>
     <header>
@@ -12,31 +14,33 @@
     </header>
     <section class="main-content">
         <div class="flashes">
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ category }}">
-                            {{ message }}
-                        </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
+            <!-- Django messages -->
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
         </div>
 
         {% block content %}{% endblock %}
     </section>
     <footer>
         <p>Stock Scraper and Sentiment Analysis. This is a tool, not a substitute for financial advice or decision-making. Use Responsibly.</p>
-        {% if 'username' in session %}
-        <a href="{{ url_for('update') }}" class="whiten">Update Password</a> |
-        <a href="{{ url_for('delete') }}" class="whiten">Delete Account</a> |
-        <a href="{{ url_for('signout') }}" class="whiten">Sign Out</a>
+        {% if user.is_authenticated %}
+            <!-- If you are storing your username in a variable, you can also display it here -->
+            <!-- e.g. Hello, {{ username }} -->
+            <a href="{% url 'update' %}" class="whiten">Update Password</a> |
+            <a href="{% url 'delete' %}" class="whiten">Delete Account</a> |
+            <a href="{% url 'signout' %}" class="whiten">Sign Out</a>
         {% else %}
-            <a href="{{ url_for('login') }}" class="whiten">Login</a> |
-            <a href="{{ url_for('register') }}" class="whiten">Register</a>
+            <a href="{% url 'login' %}" class="whiten">Login</a> |
+            <a href="{% url 'register' %}" class="whiten">Register</a>
         {% endif %}
     </footer>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <!-- Use Django static for your JS -->
+    <script src="{% static 'script.js' %}"></script>
 </body>
 </html>

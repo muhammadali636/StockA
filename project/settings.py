@@ -7,6 +7,8 @@ from django.core.exceptions import ImproperlyConfigured
 BASE_DIR = Path(__file__).resolve().parent  
 
 PROJECT_ROOT = BASE_DIR.parent
+MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'
 
 
 env_file = os.path.join(PROJECT_ROOT, '.env')

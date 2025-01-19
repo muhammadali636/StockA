@@ -1,18 +1,15 @@
 {% extends "layout.html" %}
-{% block title %}Signout{% endblock %}
-
-
-
+{% block title %}Sign Out{% endblock %}
 
 {% block header %}
     <h1>You have been signed out</h1>
 {% endblock %}
 {% block content %}
     <p>You have successfully signed out.</p>
-    <a href="{{ url_for('login') }}" class="login-button">Login</a>
-    <a href="{{ url_for('register') }}" class="register-button">Register</a>
+    <a href="{% url 'login' %}" class="login-button">Login</a>
+    <a href="{% url 'register' %}" class="register-button">Register</a>
 
     <script>
-    console.log("Signout page loaded.");
+        console.log("Signout page loaded.");
     </script>
 {% endblock %}

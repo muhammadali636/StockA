@@ -5,7 +5,9 @@
 {% endblock %}
 
 {% block content %}
-    <form action="{{ url_for('update') }}" method="post" id="updateForm">
+    <!-- Adjust action to the Django named URL for updating -->
+    <form action="{% url 'update' %}" method="post" id="updateForm">
+        {% csrf_token %}
         <div>
             <label for="old_password">Old Password:</label>
             <input type="password" id="oldPassword" name="old_password" required>

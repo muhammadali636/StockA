@@ -8,6 +8,8 @@ import yfinance as yf
 import pandas as pd
 import math
 
+from django.conf import settings  # <-- ADDED to access MEDIA_ROOT
+
 #plot showing "total post counts and average stock volume over the last 12 months"
 def generate_post_counts_volume_plot(posts_data, stock):
     today = datetime.today()
@@ -76,7 +78,8 @@ def generate_post_counts_volume_plot(posts_data, stock):
     ax1.legend(bars + lines, labels_bars + labels_lines, loc='upper left')
 
     plot_filename = 'post_counts_avg_volume.png' #save
-    plot_path = os.path.join('static', plot_filename)
+    # Use MEDIA_ROOT instead of 'static'
+    plot_path = os.path.join(settings.MEDIA_ROOT, plot_filename)
     plt.savefig(plot_path)
     plt.close()
     return plot_filename
