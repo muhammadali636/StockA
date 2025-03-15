@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}User Auth{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>{% block header %}User Auth{% endblock %}</h1>
+    </header>
+    <section class="main-content">
+        <div class="flashes">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
+
+        {% block content %}{% endblock %}
+    </section>
+    <footer>
+        <p>Stock Scraper and Sentiment Analysis. This is a tool, not a substitute for financial advice or decision-making. Use Responsibly.</p>
+        {% if 'username' in session %}
+        <a href="{{ url_for('update') }}" class="whiten">Update Password</a> |
+        <a href="{{ url_for('delete') }}" class="whiten">Delete Account</a> |
+        <a href="{{ url_for('signout') }}" class="whiten">Sign Out</a>
+        {% else %}
+            <a href="{{ url_for('login') }}" class="whiten">Login</a> |
+            <a href="{{ url_for('register') }}" class="whiten">Register</a>
+        {% endif %}
+    </footer>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

@@ -63,10 +63,14 @@ def get_stock_metrics(ticker, period='3mo'):
 
 #       func to check if user entered ticker symbol is valid using yfin API
 def is_valid_ticker(ticker):
-    stock = yf.Ticker(ticker.upper())
-    symbol = stock.info.get('symbol', '')
-    if symbol and symbol.upper() == ticker.upper():
-        return True
+    try:
+        stock = yf.Ticker(ticker.upper())
+        symbol = stock.info.get('symbol', '')
+        if symbol and symbol.upper() == ticker.upper():
+            return True
+    except Exception as e:
+        # Log the error if needed: print(f"Error validating ticker {ticker}: {e}")
+        return False
     return False
 
 #VADER sentiment (neg, neu, pos, compound) and conver tthat to either POSITIVE, NEGATIVE, NEUTRAL.

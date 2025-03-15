@@ -8,8 +8,6 @@ import yfinance as yf
 import pandas as pd
 import math
 
-from django.conf import settings  # <-- ADDED to access MEDIA_ROOT
-
 #1) generate matplotlib for post counts and stock prices 
 def generate_post_counts_stock_plot(posts_data, stock):     
     today = datetime.today()
@@ -79,8 +77,7 @@ def generate_post_counts_stock_plot(posts_data, stock):
     ax1.legend(bars + lines, labels_bars + labels_lines, loc='upper left')
 
     plot_filename = 'post_counts_stock_prices.png' #save 
-    # Use MEDIA_ROOT instead of 'static'
-    plot_path = os.path.join(settings.MEDIA_ROOT, plot_filename)
+    plot_path = os.path.join('static', plot_filename)
     plt.savefig(plot_path)
     plt.close()
     return plot_filename

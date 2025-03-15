@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+
 {% block title %}Registration Page{% endblock %}
 
 {% block header %}
@@ -8,16 +9,14 @@
 {% block content %}
     <h2>Create a New Account</h2>
 
-    <!-- Adjust action to the Django named URL for registering -->
-    <form action="{% url 'register' %}" method="post" id="registerForm">
-        {% csrf_token %}
+    <form action="{{ url_for('register') }}" method="post" id="registerForm">
         <div>
             <label for="username">Username:</label>
             <input type="text" id="registerUsername" name="username" required>
         </div>
 
         <div>
-            <label for="password">Password:</label>
+            <label for="password">Password:</label> <!--if i want to set a minumum see script.js-->
             <input type="password" id="registerPassword" name="password" required>
             <input type="checkbox" id="toggleRegPassword"> Show Password
         </div>
@@ -27,6 +26,6 @@
 
     <br>
     <div class="white-bg">
-        <a href="{% url 'login' %}">Already have an account? Login here</a>
+        <a href="{{ url_for('login') }}">Already have an account? Login here</a>
     </div>
 {% endblock %}
